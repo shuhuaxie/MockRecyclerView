@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        tools:context=".MainActivity">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:text="real"
+            android:gravity="center"
+            android:textSize="16dp"
+            android:layout_height="30dp" />
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="vs"/>
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:text="mock"
+            android:textSize="16dp"
+            android:gravity="center"
+            android:layout_height="30dp" />
+    </LinearLayout>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#333333"
+        />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        tools:context=".MainActivity">
+
+    <android.support.v7.widget.RecyclerView
+        android:id="@+id/real_recycler_view"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent">
+
+    </android.support.v7.widget.RecyclerView>
+    <View
+        android:layout_width="1dp"
+        android:layout_height="match_parent"
+        android:background="#ff000000"
+        />
+    <com.example.xie.mockrecyclerview.mock.MockRecycleView
+        android:id="@+id/mock_recycler_view"
+        android:layout_width="0dp"
+        android:layout_weight="1"
+        android:layout_height="match_parent">
+
+    </com.example.xie.mockrecyclerview.mock.MockRecycleView>
+</LinearLayout>
+</LinearLayout>
