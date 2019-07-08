@@ -1,7 +1,118 @@
 package com.example.xie.mockrecyclerview.mock;
 
-import android.support.v7.widget.RecyclerView;
+import android.content.Context;
+import android.graphics.Rect;
+import android.util.AttributeSet;
+import android.util.Log;
+import android.view.View;
+import android.view.ViewGroup;
 
-public class MockLinearLayoutManager extends MockRecycleView.MockLayoutManager {
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.OrientationHelper;
+import androidx.recyclerview.widget.RecyclerView;
 
+public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager {
+    private LayoutState mLayoutState;
+    private final LayoutChunkResult mLayoutChunkResult = new LayoutChunkResult();
+    MockOrientationHelper mOrientationHelper;
+
+    public MockLinearLayoutManager(Context context) {
+        this(context, MockRecyclerView.DEFAULT_ORIENTATION, false);
+    }
+
+    public MockLinearLayoutManager(Context context, int orientation, boolean reverseLayout) {
+        setOrientation(orientation);
+    }
+
+    public void onLayoutChildren(MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
+        ensureLayoutState();
+        mLayoutState.mItemDirection = 1;
+
+        this.fill(recycler, this.mLayoutState, state, false);
+    }
+
+    private void ensureLayoutState() {
+        if (mLayoutState == null) {
+            mLayoutState = createLayoutState();
+        }
+    }
+
+    LayoutState createLayoutState() {
+        return new LayoutState();
+    }
+
+    private void fill(MockRecyclerView.Recycler recycler, LayoutState layoutState, MockRecyclerView.State state, boolean stopOnFocusable) {
+        int remainingSpace = layoutState.mAvailable + layoutState.mExtra;
+        LayoutChunkResult layoutChunkResult = this.mLayoutChunkResult;
+        while (layoutState.hasMore(state)) {
+            layoutChunkResult.resetInternal();
+            this.layoutChunk(recycler, state, layoutState, layoutChunkResult);
+            if (layoutChunkResult.mFinished) {
+                break;
+            }
+            layoutState.mOffset += layoutChunkResult.mConsumed * 1;
+        }
+    }
+
+    void layoutChunk(MockRecyclerView.Recycler recycler, MockRecyclerView.State state, LayoutState layoutState, LayoutChunkResult result) {
+        View view = layoutState.next(recycler);
+        if (view == null) {
+            result.mFinished = true;
+        } else {
+            MockRecyclerView.LayoutParams params = (MockRecyclerView.LayoutParams) view.getLayoutParams();
+            addView(view);
+            measureChildWithMargins(view, 0, 0);
+            result.mConsumed = mOrientationHelper.getDecoratedMeasurement(view);
+            int left, top, right, bottom;
+            left = 0;
+            right = left + mOrientationHelper.getDecoratedMeasurementInOther(view);
+            top = layoutState.mOffset;
+            bottom = layoutState.mOffset + result.mConsumed;
+            layoutDecoratedWithMargins(view, left, top, right, bottom);
+        }
+    }
+
+    @Override
+    public boolean isAutoMeasureEnabled() {
+        return true;
+    }
+
+    public void setOrientation(int orientation) {
+        mOrientationHelper =
+                MockOrientationHelper.createOrientationHelper(this, orientation);
+
+    }
+
+    protected static class LayoutChunkResult {
+        public boolean mFinished;
+        public int mConsumed;
+
+        protected LayoutChunkResult() {
+        }
+
+        void resetInternal() {
+            this.mFinished = false;
+        }
+    }
+
+    static class LayoutState {
+        int mCurrentPosition;
+        int mItemDirection;
+        public boolean mInfinite;
+        public int mAvailable;
+        int mExtra = 0;
+        int mOffset;
+
+        boolean hasMore(MockRecyclerView.State state) {
+            return this.mCurrentPosition >= 0 && this.mCurrentPosition < state.getItemCount();
+        }
+
+        View next(MockRecyclerView.Recycler recycler) {
+            View view = recycler.getViewForPosition(this.mCurrentPosition);
+            this.mCurrentPosition += this.mItemDirection;
+            return view;
+
+        }
+    }
 }

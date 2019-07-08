@@ -2,21 +2,22 @@ package com.example.xie.mockrecyclerview;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v7.widget.LinearLayoutManager;
-import android.support.v7.widget.RecyclerView;
 import android.view.View;
 import android.widget.TextView;
 
 import com.example.xie.mockrecyclerview.mock.MockAdapter;
 import com.example.xie.mockrecyclerview.mock.MockLinearLayoutManager;
-import com.example.xie.mockrecyclerview.mock.MockRecycleView;
+import com.example.xie.mockrecyclerview.mock.MockRecyclerView;
 
 import java.util.ArrayList;
 
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 public class MainActivity extends Activity {
     RecyclerView mReal;
-    MockRecycleView mMock;
+    MockRecyclerView mMock;
     ArrayList<Info> mInfos = new ArrayList<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,7 +27,7 @@ public class MainActivity extends Activity {
         info.setName("good");
         mInfos.add(info);
         info = new Info();
-        info.setName("night");
+        info.setName("night!!!");
         mInfos.add(info);
 
         mReal = findViewById(R.id.real_recycler_view);
@@ -34,7 +35,7 @@ public class MainActivity extends Activity {
         mReal.setLayoutManager(new LinearLayoutManager(this));
         mReal.setAdapter(new SimplyAdapter(mInfos,this));
 
-        mMock.setLayoutManager(new MockLinearLayoutManager());
+        mMock.setLayoutManager(new MockLinearLayoutManager(this));
         mMock.setAdapter(new MockAdapter(mInfos,this));
     }
 
@@ -49,11 +50,8 @@ public class MainActivity extends Activity {
             return mTextView;
         }
 
-        public void setTextView(TextView textView) {
-            mTextView = textView;
-        }
     }
-    public static class MockViewHolder extends MockRecycleView.ViewHolder{
+    public static class MockViewHolder extends MockRecyclerView.ViewHolder{
         TextView mTextView;
         public MockViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -64,8 +62,5 @@ public class MainActivity extends Activity {
             return mTextView;
         }
 
-        public void setTextView(TextView textView) {
-            mTextView = textView;
-        }
     }
 }

@@ -41,24 +41,24 @@
         android:orientation="horizontal"
         tools:context=".MainActivity">
 
-    <android.support.v7.widget.RecyclerView
+    <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/real_recycler_view"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="match_parent">
 
-    </android.support.v7.widget.RecyclerView>
+    </androidx.recyclerview.widget.RecyclerView>
     <View
         android:layout_width="1dp"
         android:layout_height="match_parent"
         android:background="#ff000000"
         />
-    <com.example.xie.mockrecyclerview.mock.MockRecycleView
+    <com.example.xie.mockrecyclerview.mock.MockRecyclerView
         android:id="@+id/mock_recycler_view"
         android:layout_width="0dp"
         android:layout_weight="1"
         android:layout_height="match_parent">
 
-    </com.example.xie.mockrecyclerview.mock.MockRecycleView>
+    </com.example.xie.mockrecyclerview.mock.MockRecyclerView>
 </LinearLayout>
 </LinearLayout>

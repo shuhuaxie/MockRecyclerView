@@ -1,8 +1,6 @@
 package com.example.xie.mockrecyclerview.mock;
 
 import android.content.Context;
-import android.support.annotation.NonNull;
-import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 
@@ -12,7 +10,9 @@ import com.example.xie.mockrecyclerview.R;
 
 import java.util.ArrayList;
 
-public class MockAdapter extends MockRecycleView.Adapter<MainActivity.MockViewHolder> {
+import androidx.annotation.NonNull;
+
+public class MockAdapter extends MockRecyclerView.Adapter<MainActivity.MockViewHolder> {
     ArrayList<Info> mInfos;
     Context mContext;
 
