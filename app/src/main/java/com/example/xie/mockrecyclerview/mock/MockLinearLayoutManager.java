@@ -50,7 +50,8 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         return new LayoutState();
     }
 
-    private void fill(MockRecyclerView.Recycler recycler, LayoutState layoutState, MockRecyclerView.State state, boolean stopOnFocusable) {
+    private int fill(MockRecyclerView.Recycler recycler, LayoutState layoutState, MockRecyclerView.State state, boolean stopOnFocusable) {
+        final int start = layoutState.mAvailable;
         int remainingSpace = layoutState.mAvailable + layoutState.mExtra;
         LayoutChunkResult layoutChunkResult = this.mLayoutChunkResult;
         while (layoutState.hasMore(state)) {
@@ -59,8 +60,12 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             if (layoutChunkResult.mFinished) {
                 break;
             }
+
             layoutState.mOffset += layoutChunkResult.mConsumed * 1;
+            layoutState.mAvailable -= layoutChunkResult.mConsumed;
+            layoutState.mScrollingOffset += layoutChunkResult.mConsumed;
         }
+        return start - layoutState.mAvailable;
     }
 
     void layoutChunk(MockRecyclerView.Recycler recycler, MockRecyclerView.State state, LayoutState layoutState, LayoutChunkResult result) {
@@ -90,7 +95,14 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         return scrollBy(dy, recycler, state);
     }
     int scrollBy(int dy, MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
-        final int scrolled = dy;
+        final int layoutDirection = dy > 0 ? LayoutState.LAYOUT_END : LayoutState.LAYOUT_START;
+        final int absDy = Math.abs(dy);
+        final int consumed = mLayoutState.mScrollingOffset
+                + fill(recycler, mLayoutState, state, false);
+        if (consumed < 0) {
+            return 0;
+        }
+        final int scrolled = absDy > consumed ? layoutDirection * consumed : dy;
         mOrientationHelper.offsetChildren(-scrolled);
         return scrolled;
     }
@@ -124,6 +136,9 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         public int mAvailable;
         int mExtra = 0;
         int mOffset;
+        static final int LAYOUT_START = -1;
+        static final int LAYOUT_END = 1;
+        int mScrollingOffset;
 
         boolean hasMore(MockRecyclerView.State state) {
             return this.mCurrentPosition >= 0 && this.mCurrentPosition < state.getItemCount();

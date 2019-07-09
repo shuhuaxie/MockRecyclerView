@@ -13,7 +13,10 @@ import android.widget.LinearLayout;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
+import androidx.core.view.NestedScrollingChildHelper;
 import androidx.core.view.ViewCompat;
+
+import static androidx.core.view.ViewCompat.TYPE_TOUCH;
 
 public class MockRecyclerView extends ViewGroup {
     private MockLayoutManager mLayout;
@@ -30,6 +33,10 @@ public class MockRecyclerView extends ViewGroup {
     private int mLastTouchX;
     private int mLastTouchY;
     private final int[] mScrollStepConsumed = new int[2];
+    private NestedScrollingChildHelper mScrollingChildHelper;
+    private final int[] mScrollOffset = new int[2];
+    final int[] mScrollConsumed = new int[2];
+    private final int[] mNestedOffsets = new int[2];
 
     public MockRecyclerView(Context context) {
         this(context, (AttributeSet) null);
@@ -79,6 +86,10 @@ public class MockRecyclerView extends ViewGroup {
                 final int y = (int) (e.getY() + 0.5f);
                 int dx = mLastTouchX - x;
                 int dy = mLastTouchY - y;
+
+                mLastTouchX = x - mScrollOffset[0];
+                mLastTouchY = y - mScrollOffset[1];
+
                 if (scrollByInternal(
                          0,
                         canScrollVertically ? dy : 0,
@@ -89,6 +100,8 @@ public class MockRecyclerView extends ViewGroup {
         }
         return true;
     }
+
+
     boolean scrollByInternal(int x, int y, MotionEvent ev) {
         int consumedX = 0, consumedY = 0;
         if (mAdapter != null) {
@@ -98,6 +111,7 @@ public class MockRecyclerView extends ViewGroup {
         }
         return consumedX != 0 || consumedY != 0;
     }
+
     void scrollStep(int dx, int dy, @Nullable int[] consumed) {
         int consumedX = 0;
         int consumedY = 0;
@@ -108,6 +122,12 @@ public class MockRecyclerView extends ViewGroup {
             consumed[0] = consumedX;
             consumed[1] = consumedY;
         }
+    }
+
+    public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow,
+                                           int type) {
+        return getScrollingChildHelper().dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow,
+                type);
     }
     private void dispatchLayoutStep1() {
         mState.mItemCount = mAdapter.getItemCount();
@@ -255,7 +275,6 @@ public class MockRecyclerView extends ViewGroup {
                 throw new IndexOutOfBoundsException("Invalid item position " + position + "(" + position + "). Item count:" +
                         MockRecyclerView.this.mState.getItemCount() + MockRecyclerView.this.exceptionLabel());
             }
-
 
         }
 
@@ -593,5 +612,11 @@ public class MockRecyclerView extends ViewGroup {
         public LayoutParams(ViewGroup.LayoutParams source) {
             super(source);
         }
+    }
+    private NestedScrollingChildHelper getScrollingChildHelper() {
+        if (mScrollingChildHelper == null) {
+            mScrollingChildHelper = new NestedScrollingChildHelper(this);
+        }
+        return mScrollingChildHelper;
     }
 }
