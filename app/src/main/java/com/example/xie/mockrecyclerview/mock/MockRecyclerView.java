@@ -5,6 +5,7 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -13,7 +14,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.view.ViewCompat;
-import androidx.recyclerview.widget.RecyclerView;
 
 public class MockRecyclerView extends ViewGroup {
     private MockLayoutManager mLayout;
@@ -25,6 +25,11 @@ public class MockRecyclerView extends ViewGroup {
     static final boolean ALLOW_SIZE_IN_UNSPECIFIED_SPEC = Build.VERSION.SDK_INT >= 23;
     static final int DEFAULT_ORIENTATION = VERTICAL;
     final Rect mTempRect = new Rect();
+    private int mInitialTouchX;
+    private int mInitialTouchY;
+    private int mLastTouchX;
+    private int mLastTouchY;
+    private final int[] mScrollStepConsumed = new int[2];
 
     public MockRecyclerView(Context context) {
         this(context, (AttributeSet) null);
@@ -59,7 +64,51 @@ public class MockRecyclerView extends ViewGroup {
             mLayout.setMeasuredDimensionFromChildren(widthSpec, heightSpec);
         }
     }
-
+    @Override
+    public boolean onTouchEvent(MotionEvent e) {
+        final boolean canScrollVertically = mLayout.canScrollVertically();
+        final int action = e.getActionMasked();
+        final MotionEvent vtev = MotionEvent.obtain(e);
+        switch (action) {
+            case MotionEvent.ACTION_DOWN: {
+                mInitialTouchX = mLastTouchX = (int) (e.getX() + 0.5f);
+                mInitialTouchY = mLastTouchY = (int) (e.getY() + 0.5f);
+            }
+            case MotionEvent.ACTION_MOVE:{
+                final int x = (int) (e.getX() + 0.5f);
+                final int y = (int) (e.getY() + 0.5f);
+                int dx = mLastTouchX - x;
+                int dy = mLastTouchY - y;
+                if (scrollByInternal(
+                         0,
+                        canScrollVertically ? dy : 0,
+                        vtev)) {
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                }
+            }
+        }
+        return true;
+    }
+    boolean scrollByInternal(int x, int y, MotionEvent ev) {
+        int consumedX = 0, consumedY = 0;
+        if (mAdapter != null) {
+            scrollStep(x, y, mScrollStepConsumed);
+            consumedX = mScrollStepConsumed[0];
+            consumedY = mScrollStepConsumed[1];
+        }
+        return consumedX != 0 || consumedY != 0;
+    }
+    void scrollStep(int dx, int dy, @Nullable int[] consumed) {
+        int consumedX = 0;
+        int consumedY = 0;
+        if (dy != 0) {
+            consumedY = mLayout.scrollVerticallyBy(dy, mRecycler, mState);
+        }
+        if (consumed != null) {
+            consumed[0] = consumedX;
+            consumed[1] = consumedY;
+        }
+    }
     private void dispatchLayoutStep1() {
         mState.mItemCount = mAdapter.getItemCount();
     }
@@ -67,10 +116,10 @@ public class MockRecyclerView extends ViewGroup {
     void defaultOnMeasure(int widthSpec, int heightSpec) {
         // calling LayoutManager here is not pretty but that API is already public and it is better
         // than creating another method since this is internal.
-        final int width = RecyclerView.LayoutManager.chooseSize(widthSpec,
+        final int width = MockLayoutManager.chooseSize(widthSpec,
                 getPaddingLeft() + getPaddingRight(),
                 ViewCompat.getMinimumWidth(this));
-        final int height = RecyclerView.LayoutManager.chooseSize(heightSpec,
+        final int height = MockLayoutManager.chooseSize(heightSpec,
                 getPaddingTop() + getPaddingBottom(),
                 ViewCompat.getMinimumHeight(this));
 
@@ -135,6 +184,13 @@ public class MockRecyclerView extends ViewGroup {
 
             }
         });
+    }
+
+    private void offsetChildrenVertical(int dy) {
+        final int childCount = mChildHelper.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+            mChildHelper.getChildAt(i).offsetTopAndBottom(dy);
+        }
     }
 
     public abstract static class Adapter<VH extends MockRecyclerView.ViewHolder> {
@@ -248,23 +304,18 @@ public class MockRecyclerView extends ViewGroup {
             final Rect insets = mRecyclerView.getItemDecorInsetsForChild(child);
             widthUsed += insets.left + insets.right;
             heightUsed += insets.top + insets.bottom;
-            Log.e("xie","widthSpec... ");
             final int widthSpec = getChildMeasureSpec(getWidth(), getWidthMode(),
 //                    getPaddingLeft() + getPaddingRight()
 //                    +lp.leftMargin + lp.rightMargin +
                     widthUsed, lp.width,
                     canScrollHorizontally());
-            Log.e("xie","heightSpec... ");
             final int heightSpec = getChildMeasureSpec(getHeight(), getHeightMode(),
 //                    getPaddingTop() + getPaddingBottom()
 //                    +lp.topMargin + lp.bottomMargin
                     +heightUsed, lp.height,
                     canScrollVertically());
-            Log.e("xie", "widthSpec = " + widthSpec);
-            Log.e("xie", "heightSpec = " + heightSpec);
             if (shouldMeasureChild(child, widthSpec, heightSpec, lp)) {
                 child.measure(widthSpec, heightSpec);
-                Log.e("xie", "child width = " + child.getMeasuredWidth());
             }
         }
 
@@ -315,8 +366,6 @@ public class MockRecyclerView extends ViewGroup {
                 }
             }
             //noinspection WrongConstant
-            Log.e("xie","resultSize = "+resultSize);
-            Log.e("xie","resultMode = "+resultMode);
             return MeasureSpec.makeMeasureSpec(resultSize, resultMode);
         }
 
@@ -383,7 +432,6 @@ public class MockRecyclerView extends ViewGroup {
 
         public int getDecoratedMeasuredWidth(@NonNull View child) {
             final Rect insets = new Rect(); //((LayoutParams) child.getLayoutParams()).mDecorInsets;
-            Log.e("xie", "measuredWidth: " + child.getMeasuredWidth());
             return child.getMeasuredWidth() + insets.left + insets.right;
         }
 
@@ -443,7 +491,6 @@ public class MockRecyclerView extends ViewGroup {
             }
             mRecyclerView.mTempRect.set(minX, minY, maxX, maxY);
 //            mRecyclerView.mTempRect.set(minX, minY, minX + 720, maxY);
-            Log.e("xie","widthSpec = "+widthSpec);
             setMeasuredDimension(mRecyclerView.mTempRect, widthSpec, heightSpec);
         }
 
@@ -498,7 +545,17 @@ public class MockRecyclerView extends ViewGroup {
                 mHeight = 0;
             }
         }
+
+        public int scrollVerticallyBy(int dy, Recycler recycler, State state) {
+            return 0;
+        }
+        public void offsetChildrenVertical(@Px int dy) {
+            if (mRecyclerView != null) {
+                mRecyclerView.offsetChildrenVertical(dy);
+            }
+        }
     }
+
 
     private static void getDecoratedBoundsWithMarginsInt(View view, Rect outBounds) {
         final ViewGroup.LayoutParams lp = view.getLayoutParams();

@@ -48,6 +48,11 @@ public abstract class MockOrientationHelper {
 //                        + params.bottomMargin
                         ;
             }
+            @Override
+            public void offsetChildren(int amount) {
+                layoutManager.offsetChildrenVertical(amount);
+            }
+
         };
     }
 
@@ -59,4 +64,7 @@ public abstract class MockOrientationHelper {
     public abstract int getDecoratedMeasurementInOther(View view);
 
     public abstract int getDecoratedMeasurement(View view);
+
+    public abstract void offsetChildren(int i);
+
 }

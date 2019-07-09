@@ -16,6 +16,10 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     private LayoutState mLayoutState;
     private final LayoutChunkResult mLayoutChunkResult = new LayoutChunkResult();
     MockOrientationHelper mOrientationHelper;
+    public static final int HORIZONTAL = RecyclerView.HORIZONTAL;
+    public static final int VERTICAL = RecyclerView.VERTICAL;
+    int mOrientation = MockRecyclerView.DEFAULT_ORIENTATION;
+
 
     public MockLinearLayoutManager(Context context) {
         this(context, MockRecyclerView.DEFAULT_ORIENTATION, false);
@@ -30,6 +34,10 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         mLayoutState.mItemDirection = 1;
 
         this.fill(recycler, this.mLayoutState, state, false);
+    }
+    @Override
+    public boolean canScrollVertically() {
+        return mOrientation == VERTICAL;
     }
 
     private void ensureLayoutState() {
@@ -74,6 +82,19 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     }
 
     @Override
+    public int scrollVerticallyBy(int dy, MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
+        if (mOrientation == HORIZONTAL) {
+            return 0;
+        }
+
+        return scrollBy(dy, recycler, state);
+    }
+    int scrollBy(int dy, MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
+        final int scrolled = dy;
+        mOrientationHelper.offsetChildren(-scrolled);
+        return scrolled;
+    }
+    @Override
     public boolean isAutoMeasureEnabled() {
         return true;
     }
@@ -81,7 +102,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     public void setOrientation(int orientation) {
         mOrientationHelper =
                 MockOrientationHelper.createOrientationHelper(this, orientation);
-
+        mOrientation = orientation;
     }
 
     protected static class LayoutChunkResult {
