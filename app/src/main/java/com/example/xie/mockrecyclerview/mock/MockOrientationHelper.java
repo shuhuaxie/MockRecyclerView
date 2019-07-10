@@ -53,6 +53,30 @@ public abstract class MockOrientationHelper {
                 layoutManager.offsetChildrenVertical(amount);
             }
 
+            @Override
+            public int getDecoratedEnd(View view) {
+                final ViewGroup.LayoutParams params =
+                        view.getLayoutParams();
+                return layoutManager.getDecoratedBottom(view) ;//+ params.bottomMargin
+            }
+
+            @Override
+            public int getEndAfterPadding() {
+                return layoutManager.getHeight(); //- layoutManager.getPaddingBottom();
+            }
+
+            @Override
+            public int getDecoratedStart(View view) {
+                final ViewGroup.LayoutParams params =
+                        view.getLayoutParams();
+                return layoutManager.getDecoratedTop(view);// - params.topMargin;
+            }
+
+            @Override
+            public int getStartAfterPadding() {
+                return layoutManager.getPaddingTop();
+            }
+
         };
     }
 
@@ -67,4 +91,11 @@ public abstract class MockOrientationHelper {
 
     public abstract void offsetChildren(int i);
 
+    public abstract int getDecoratedEnd(View child);
+
+    public abstract int getEndAfterPadding();
+
+    public abstract int getDecoratedStart(View child);
+
+    public abstract int getStartAfterPadding();
 }

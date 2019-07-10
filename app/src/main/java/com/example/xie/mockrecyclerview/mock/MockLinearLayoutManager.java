@@ -35,6 +35,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
 
         this.fill(recycler, this.mLayoutState, state, false);
     }
+
     @Override
     public boolean canScrollVertically() {
         return mOrientation == VERTICAL;
@@ -68,6 +69,30 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         return start - layoutState.mAvailable;
     }
 
+    private void updateLayoutState(int layoutDirection, int requiredSpace,
+                                   boolean canUseExistingSpace, MockRecyclerView.State state) {
+
+        int scrollingOffset = 0;
+        if (layoutDirection == LayoutState.LAYOUT_END) {
+            final View child = getChildClosestToEnd();
+            scrollingOffset = mOrientationHelper.getDecoratedEnd(child)
+                    - mOrientationHelper.getEndAfterPadding();// 121 = 1353 - 1232  // 118 = 1350 - 1232
+        } else {
+            final View child = getChildClosestToStart();
+            scrollingOffset = -mOrientationHelper.getDecoratedStart(child)
+                    + mOrientationHelper.getStartAfterPadding(); //
+        }
+        mLayoutState.mScrollingOffset = scrollingOffset;
+    }
+
+    private View getChildClosestToStart() {
+        return getChildAt(0);
+    }
+
+    private View getChildClosestToEnd() {
+        return getChildAt(getChildCount() - 1);
+    }
+
     void layoutChunk(MockRecyclerView.Recycler recycler, MockRecyclerView.State state, LayoutState layoutState, LayoutChunkResult result) {
         View view = layoutState.next(recycler);
         if (view == null) {
@@ -94,11 +119,14 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
 
         return scrollBy(dy, recycler, state);
     }
+
     int scrollBy(int dy, MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
         final int layoutDirection = dy > 0 ? LayoutState.LAYOUT_END : LayoutState.LAYOUT_START;
         final int absDy = Math.abs(dy);
-        final int consumed = mLayoutState.mScrollingOffset
-                + fill(recycler, mLayoutState, state, false);
+        updateLayoutState(layoutDirection, absDy, true, state);
+        final int consumed = mLayoutState.mScrollingOffset //0 +0 = 0;
+                //+ fill(recycler, mLayoutState, state, false)
+                ;
         if (consumed < 0) {
             return 0;
         }
@@ -106,6 +134,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         mOrientationHelper.offsetChildren(-scrolled);
         return scrolled;
     }
+
     @Override
     public boolean isAutoMeasureEnabled() {
         return true;

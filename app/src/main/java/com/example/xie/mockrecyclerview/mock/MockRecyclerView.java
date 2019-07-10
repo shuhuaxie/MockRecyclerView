@@ -71,6 +71,7 @@ public class MockRecyclerView extends ViewGroup {
             mLayout.setMeasuredDimensionFromChildren(widthSpec, heightSpec);
         }
     }
+
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         final boolean canScrollVertically = mLayout.canScrollVertically();
@@ -81,7 +82,7 @@ public class MockRecyclerView extends ViewGroup {
                 mInitialTouchX = mLastTouchX = (int) (e.getX() + 0.5f);
                 mInitialTouchY = mLastTouchY = (int) (e.getY() + 0.5f);
             }
-            case MotionEvent.ACTION_MOVE:{
+            case MotionEvent.ACTION_MOVE: {
                 final int x = (int) (e.getX() + 0.5f);
                 final int y = (int) (e.getY() + 0.5f);
                 int dx = mLastTouchX - x;
@@ -91,7 +92,7 @@ public class MockRecyclerView extends ViewGroup {
                 mLastTouchY = y - mScrollOffset[1];
 
                 if (scrollByInternal(
-                         0,
+                        0,
                         canScrollVertically ? dy : 0,
                         vtev)) {
                     getParent().requestDisallowInterceptTouchEvent(true);
@@ -129,6 +130,7 @@ public class MockRecyclerView extends ViewGroup {
         return getScrollingChildHelper().dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow,
                 type);
     }
+
     private void dispatchLayoutStep1() {
         mState.mItemCount = mAdapter.getItemCount();
     }
@@ -192,15 +194,18 @@ public class MockRecyclerView extends ViewGroup {
             }
 
 
-            @Override public void removeViewAt(int index) {
+            @Override
+            public void removeViewAt(int index) {
 
             }
 
-            @Override public View getChildAt(int offset) {
+            @Override
+            public View getChildAt(int offset) {
                 return MockRecyclerView.this.getChildAt(offset);
             }
 
-            @Override public void removeAllViews() {
+            @Override
+            public void removeAllViews() {
 
             }
         });
@@ -279,7 +284,7 @@ public class MockRecyclerView extends ViewGroup {
         }
 
         private void tryBindViewHolderByDeadline(ViewHolder holder, int offsetPosition, int position, long deadlineNs) {
-                mAdapter.bindViewHolder(holder, position);
+            mAdapter.bindViewHolder(holder, position);
         }
 
     }
@@ -415,17 +420,6 @@ public class MockRecyclerView extends ViewGroup {
             return mWidth;
         }
 
-        /**
-         * Returns the height that is currently relevant to the LayoutManager.
-         * <p>
-         * <p>This value is usually equal to the laid out height of the {@link RecyclerView} but may
-         * reflect the current {@link android.view.View.MeasureSpec} height if the
-         * {@link RecyclerView.LayoutManager} is using AutoMeasure and the RecyclerView is in the process of
-         * measuring. The LayoutManager must always use this method to retrieve the height relevant
-         * to it at any given time.
-         *
-         * @return Height in pixels
-         */
         @Px
         public int getHeight() {
             return mHeight;
@@ -509,7 +503,6 @@ public class MockRecyclerView extends ViewGroup {
                 }
             }
             mRecyclerView.mTempRect.set(minX, minY, maxX, maxY);
-//            mRecyclerView.mTempRect.set(minX, minY, minX + 720, maxY);
             setMeasuredDimension(mRecyclerView.mTempRect, widthSpec, heightSpec);
         }
 
@@ -568,10 +561,23 @@ public class MockRecyclerView extends ViewGroup {
         public int scrollVerticallyBy(int dy, Recycler recycler, State state) {
             return 0;
         }
+
         public void offsetChildrenVertical(@Px int dy) {
             if (mRecyclerView != null) {
                 mRecyclerView.offsetChildrenVertical(dy);
             }
+        }
+
+        public int getDecoratedBottom(@NonNull View child) {
+            return child.getBottom();// + getBottomDecorationHeight(child);
+        }
+
+        public int getDecoratedTop(@NonNull View child) {
+            return child.getTop();// - getTopDecorationHeight(child);
+        }
+
+        public int getPaddingTop() {
+            return mRecyclerView != null ? mRecyclerView.getPaddingTop() : 0;
         }
     }
 
@@ -613,6 +619,7 @@ public class MockRecyclerView extends ViewGroup {
             super(source);
         }
     }
+
     private NestedScrollingChildHelper getScrollingChildHelper() {
         if (mScrollingChildHelper == null) {
             mScrollingChildHelper = new NestedScrollingChildHelper(this);
