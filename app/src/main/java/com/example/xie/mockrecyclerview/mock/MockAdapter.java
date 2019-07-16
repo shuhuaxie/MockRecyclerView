@@ -2,7 +2,9 @@ package com.example.xie.mockrecyclerview.mock;
 
 import android.content.Context;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import com.example.xie.mockrecyclerview.Info;
 import com.example.xie.mockrecyclerview.MainActivity;
@@ -28,8 +30,13 @@ public class MockAdapter extends MockRecyclerView.Adapter<MainActivity.MockViewH
     }
 
     @Override
-    public void onBindViewHolder(@NonNull MainActivity.MockViewHolder viewHolder, int i) {
+    public void onBindViewHolder(@NonNull MainActivity.MockViewHolder viewHolder,final int i) {
         viewHolder.getTextView().setText(mInfos.get(i).getName());
+        viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Toast.makeText(mContext, mInfos.get(i).getName(), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override

@@ -7,6 +7,7 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 
@@ -37,6 +38,11 @@ public class MockRecyclerView extends ViewGroup {
     private final int[] mScrollOffset = new int[2];
     final int[] mScrollConsumed = new int[2];
     private final int[] mNestedOffsets = new int[2];
+    private int mScrollState = SCROLL_STATE_IDLE;
+
+    public static final int SCROLL_STATE_IDLE = 0;
+    public static final int SCROLL_STATE_DRAGGING = 1;
+    private int mTouchSlop;
 
     public MockRecyclerView(Context context) {
         this(context, (AttributeSet) null);
@@ -49,6 +55,8 @@ public class MockRecyclerView extends ViewGroup {
     public MockRecyclerView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
         this.initChildrenHelper();
+        final ViewConfiguration vc = ViewConfiguration.get(context);
+        mTouchSlop = vc.getScaledTouchSlop();
     }
 
     @Override
@@ -71,7 +79,11 @@ public class MockRecyclerView extends ViewGroup {
             mLayout.setMeasuredDimensionFromChildren(widthSpec, heightSpec);
         }
     }
-
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent e) {
+        onTouchEvent(e);
+        return mScrollState == SCROLL_STATE_DRAGGING;
+    }
     @Override
     public boolean onTouchEvent(MotionEvent e) {
         final boolean canScrollVertically = mLayout.canScrollVertically();
@@ -79,6 +91,7 @@ public class MockRecyclerView extends ViewGroup {
         final MotionEvent vtev = MotionEvent.obtain(e);
         switch (action) {
             case MotionEvent.ACTION_DOWN: {
+                mScrollState = SCROLL_STATE_IDLE;
                 mInitialTouchX = mLastTouchX = (int) (e.getX() + 0.5f);
                 mInitialTouchY = mLastTouchY = (int) (e.getY() + 0.5f);
             }
@@ -90,14 +103,33 @@ public class MockRecyclerView extends ViewGroup {
 
                 mLastTouchX = x - mScrollOffset[0];
                 mLastTouchY = y - mScrollOffset[1];
-
-                if (scrollByInternal(
-                        0,
-                        canScrollVertically ? dy : 0,
-                        vtev)) {
-                    getParent().requestDisallowInterceptTouchEvent(true);
+                if (mScrollState != SCROLL_STATE_DRAGGING) {
+                    boolean startScroll = false;
+                    if (canScrollVertically && Math.abs(dy) > mTouchSlop) {
+                        if (dy > 0) {
+                            dy -= mTouchSlop;
+                        } else {
+                            dy += mTouchSlop;
+                        }
+                        startScroll = true;
+                    }
+                    if (startScroll) {
+                        mScrollState = SCROLL_STATE_DRAGGING;
+                    }
+                }
+                if (mScrollState == SCROLL_STATE_DRAGGING) {
+                    if (scrollByInternal(
+                            0,
+                            canScrollVertically ? dy : 0,
+                            vtev)) {
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
                 }
             }
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+
+
         }
         return true;
     }

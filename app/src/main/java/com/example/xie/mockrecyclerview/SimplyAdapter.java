@@ -2,7 +2,9 @@ package com.example.xie.mockrecyclerview;
 
 import android.content.Context;
 import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import java.util.ArrayList;
 
@@ -25,8 +27,13 @@ public class SimplyAdapter extends RecyclerView.Adapter<MainActivity.SimpleViewH
     }
 
     @Override
-    public void onBindViewHolder(@NonNull MainActivity.SimpleViewHolder viewHolder, int i) {
+    public void onBindViewHolder(@NonNull MainActivity.SimpleViewHolder viewHolder,final int i) {
         viewHolder.getTextView().setText(mInfos.get(i).getName());
+        viewHolder.itemView.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                Toast.makeText(mContext,mInfos.get(i).getName(),Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     @Override
