@@ -16,6 +16,9 @@ import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.view.NestedScrollingChildHelper;
 import androidx.core.view.ViewCompat;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
 
 import static androidx.core.view.ViewCompat.TYPE_TOUCH;
 
@@ -42,6 +45,7 @@ public class MockRecyclerView extends ViewGroup {
 
     public static final int SCROLL_STATE_IDLE = 0;
     public static final int SCROLL_STATE_DRAGGING = 1;
+    public static final int NO_POSITION = -1;
     private int mTouchSlop;
 
     public MockRecyclerView(Context context) {
@@ -228,7 +232,8 @@ public class MockRecyclerView extends ViewGroup {
 
             @Override
             public void removeViewAt(int index) {
-
+//                final View child = MockRecyclerView.this.getChildAt(index);
+                MockRecyclerView.this.removeViewAt(index);
             }
 
             @Override
@@ -275,19 +280,36 @@ public class MockRecyclerView extends ViewGroup {
         public abstract int getItemCount();
 
         public void bindViewHolder(VH holder, int position) {
+            holder.mPosition = position;
             onBindViewHolder(holder, position);
         }
     }
 
     public static class State {
         int mItemCount = 0;
-
+        boolean mInPreLayout = false;
         public int getItemCount() {
             return mItemCount;
         }
+
+        public boolean isPreLayout() {
+            return mInPreLayout;
+        }
+    }
+
+    @Override
+    protected ViewGroup.LayoutParams generateDefaultLayoutParams() {
+        if (mLayout == null) {
+            throw new IllegalStateException("RecyclerView has no LayoutManager" + exceptionLabel());
+        }
+        return mLayout.generateDefaultLayoutParams();
     }
 
     public final class Recycler {
+        final ArrayList<ViewHolder> mAttachedScrap = new ArrayList<>();
+        ArrayList<ViewHolder> mChangedScrap = null;
+
+        final ArrayList<RecyclerView.ViewHolder> mCachedViews = new ArrayList<RecyclerView.ViewHolder>();
 
         @NonNull
         public View getViewForPosition(int position) {
@@ -299,14 +321,40 @@ public class MockRecyclerView extends ViewGroup {
         }
 
         @Nullable
-        MockRecyclerView.ViewHolder tryGetViewHolderForPositionByDeadline(int position, boolean dryRun, long deadlineNs) {
+        ViewHolder tryGetViewHolderForPositionByDeadline(int position, boolean dryRun, long deadlineNs) {
             if (position >= 0 && position < MockRecyclerView.this.mState.getItemCount()) {
                 int type;
                 int offsetPosition = 0;
-                MockRecyclerView.ViewHolder holder = null;
-                type = MockRecyclerView.this.mAdapter.getItemViewType(offsetPosition);
-                holder = MockRecyclerView.this.mAdapter.createViewHolder(MockRecyclerView.this, type);
+                ViewHolder holder = null;
+                // 0) If there is a changed scrap, try to find from there
+                if (mState.isPreLayout()) {
+//                    holder = getChangedScrapViewForPosition(position);
+//                    fromScrapOrHiddenOrCache = holder != null;
+                }
+                if (holder == null) {
+                    holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);
+                    if (holder != null) {
+
+                    }
+                }
+
+                if (holder == null) {
+                    type = MockRecyclerView.this.mAdapter.getItemViewType(offsetPosition);
+                    holder = MockRecyclerView.this.mAdapter.createViewHolder(MockRecyclerView.this, type);
+                }
                 tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);
+                final ViewGroup.LayoutParams lp = holder.itemView.getLayoutParams();
+                final LayoutParams rvLayoutParams;
+                if (lp == null) {
+                    rvLayoutParams = (LayoutParams) generateDefaultLayoutParams();
+                    holder.itemView.setLayoutParams(rvLayoutParams);
+                } else if (!checkLayoutParams(lp)) {
+                    rvLayoutParams = (LayoutParams) generateLayoutParams(lp);
+                    holder.itemView.setLayoutParams(rvLayoutParams);
+                } else {
+                    rvLayoutParams = (LayoutParams) lp;
+                }
+                rvLayoutParams.mViewHolder = holder;
                 return holder;
             } else {
                 throw new IndexOutOfBoundsException("Invalid item position " + position + "(" + position + "). Item count:" +
@@ -314,24 +362,125 @@ public class MockRecyclerView extends ViewGroup {
             }
 
         }
+        ViewHolder getScrapOrHiddenOrCachedHolderForPosition(int position, boolean dryRun) {
+            final int scrapCount = mAttachedScrap.size();
 
+            // Try first for an exact, non-invalid match from scrap.
+            for (int i = 0; i < scrapCount; i++) {
+                final ViewHolder holder = mAttachedScrap.get(i);
+                if (!holder.wasReturnedFromScrap() && holder.getLayoutPosition() == position
+                        && !holder.isInvalid() && (mState.mInPreLayout || !holder.isRemoved())) {
+                    holder.addFlags(ViewHolder.FLAG_RETURNED_FROM_SCRAP);
+                    return holder;
+                }
+            }
+            return null;
+        }
         private void tryBindViewHolderByDeadline(ViewHolder holder, int offsetPosition, int position, long deadlineNs) {
             mAdapter.bindViewHolder(holder, position);
         }
 
+        public void unscrapView(ViewHolder holder) {
+            if (holder.mInChangeScrap) {
+                mChangedScrap.remove(holder);
+            } else {
+                mAttachedScrap.remove(holder);
+            }
+            holder.mScrapContainer = null;
+            holder.mInChangeScrap = false;
+            holder.clearReturnedFromScrapFlag();
+        }
+
+        public void scrapView(View view) {
+            final ViewHolder holder = getChildViewHolderInt(view);
+            if (holder.hasAnyOfTheFlags(ViewHolder.FLAG_REMOVED | ViewHolder.FLAG_INVALID)
+                    || !holder.isUpdated()) {
+                if (holder.isInvalid() && !holder.isRemoved()) {
+                    throw new IllegalArgumentException("Called scrap view with an invalid view."
+                            + " Invalid views cannot be reused from scrap, they should rebound from"
+                            + " recycler pool." + exceptionLabel());
+                }
+                holder.setScrapContainer(this, false);
+                mAttachedScrap.add(holder);
+            } else {
+                if (mChangedScrap == null) {
+                    mChangedScrap = new ArrayList<ViewHolder>();
+                }
+                holder.setScrapContainer(this, true);
+                mChangedScrap.add(holder);
+            }
+        }
     }
 
+    static ViewHolder getChildViewHolderInt(View child) {
+        if (child == null) {
+            return null;
+        }
+        return ((LayoutParams) child.getLayoutParams()).mViewHolder;
+    }
 
     String exceptionLabel() {
         return " " + super.toString() + ", adapter:" + this.mAdapter + ", layout:" + this.mLayout + ", context:" + this.getContext();
     }
 
     public abstract static class ViewHolder {
+        static final int FLAG_RETURNED_FROM_SCRAP = 1 << 5;
         @NonNull
         public final View itemView;
+        Recycler mScrapContainer = null;
+        int mFlags;
+        boolean mInChangeScrap = false;
+        static final int FLAG_UPDATE = 1 << 1;
+        static final int FLAG_INVALID = 1 << 2;
+        static final int FLAG_REMOVED = 1 << 3;
+        int mPosition = NO_POSITION;
+
+        boolean isScrap() {
+            return mScrapContainer != null;
+        }
+
+        void unScrap() {
+            mScrapContainer.unscrapView(this);
+        }
+
+        boolean wasReturnedFromScrap() {
+            return (mFlags & FLAG_RETURNED_FROM_SCRAP) != 0;
+        }
 
         public ViewHolder(View itemView) {
             this.itemView = itemView;
+        }
+
+        void clearReturnedFromScrapFlag() {
+            mFlags = mFlags & ~FLAG_RETURNED_FROM_SCRAP;
+        }
+
+        void setScrapContainer(Recycler recycler, boolean isChangeScrap) {
+            mScrapContainer = recycler;
+            mInChangeScrap = isChangeScrap;
+        }
+
+        public boolean isInvalid() {
+            return (mFlags & FLAG_INVALID) != 0;
+        }
+
+        boolean isRemoved() {
+            return (mFlags & FLAG_REMOVED) != 0;
+        }
+
+        boolean hasAnyOfTheFlags(int flags) {
+            return (mFlags & flags) != 0;
+        }
+
+        boolean isUpdated() {
+            return (mFlags & FLAG_UPDATE) != 0;
+        }
+
+        public int getLayoutPosition() {
+            return  mPosition;
+        }
+        void addFlags(int flags) {
+            mFlags |= flags;
         }
     }
 
@@ -350,8 +499,22 @@ public class MockRecyclerView extends ViewGroup {
             addViewInt(child, index, false);
         }
 
-        protected void addViewInt(View child, int index, boolean b) {
-            mChildHelper.addView(child, index, false);
+        private void addViewInt(View child, int index, boolean disappearing) {
+            final ViewHolder holder = getChildViewHolderInt(child);
+            if (holder.wasReturnedFromScrap() || holder.isScrap()) {
+                if (holder.isScrap()) {
+                    holder.unScrap();
+                }
+            } else {
+                mChildHelper.addView(child, index, false);
+            }
+        }
+
+        static ViewHolder getChildViewHolderInt(View child) {
+            if (child == null) {
+                return null;
+            }
+            return ((LayoutParams) child.getLayoutParams()).mViewHolder;
         }
 
         public void measureChildWithMargins(@NonNull View child, int widthUsed, int heightUsed) {
@@ -611,6 +774,33 @@ public class MockRecyclerView extends ViewGroup {
         public int getPaddingTop() {
             return mRecyclerView != null ? mRecyclerView.getPaddingTop() : 0;
         }
+
+        public void detachAndScrapAttachedViews(@NonNull Recycler recycler) {
+            final int childCount = getChildCount();
+            for (int i = childCount - 1; i >= 0; i--) {
+                final View v = getChildAt(i);
+                scrapOrRecycleView(recycler, i, v);
+            }
+        }
+
+        private void scrapOrRecycleView(Recycler recycler, int index, View view) {
+            final ViewHolder viewHolder = getChildViewHolderInt(view);
+
+            if (viewHolder.isInvalid() && !viewHolder.isRemoved()) {
+                removeViewAt(index);
+            } else {
+                recycler.scrapView(view);
+            }
+        }
+
+        public void removeViewAt(int index) {
+            final View child = getChildAt(index);
+            if (child != null) {
+                mChildHelper.removeViewAt(index);
+            }
+        }
+
+        public abstract LayoutParams generateDefaultLayoutParams();
     }
 
 
@@ -634,6 +824,7 @@ public class MockRecyclerView extends ViewGroup {
 
     public static class LayoutParams extends android.view.ViewGroup.MarginLayoutParams {
         final Rect mDecorInsets = new Rect();
+        public ViewHolder mViewHolder;
 
         public LayoutParams(Context c, AttributeSet attrs) {
             super(c, attrs);

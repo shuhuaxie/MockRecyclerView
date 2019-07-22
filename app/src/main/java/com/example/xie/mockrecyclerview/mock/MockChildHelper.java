@@ -31,6 +31,12 @@ public class MockChildHelper {
         final int offset = getOffset(index);
         return mCallback.getChildAt(offset);
     }
+    void removeViewAt(int index) {
+        final int offset = getOffset(index);
+        final View view = mCallback.getChildAt(offset);
+        mCallback.removeViewAt(offset);
+    }
+
     interface Callback {
         int getChildCount();
 
