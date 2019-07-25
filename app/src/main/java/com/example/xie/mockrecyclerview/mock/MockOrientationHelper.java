@@ -77,6 +77,21 @@ public abstract class MockOrientationHelper {
                 return layoutManager.getPaddingTop();
             }
 
+            @Override
+            public int getEnd() {
+                return layoutManager.getHeight();
+            }
+
+            @Override
+            public int getEndPadding() {
+                return layoutManager.getPaddingBottom();
+            }
+
+            @Override
+            public int getTotalSpace() {
+                return layoutManager.getHeight();
+            }
+
         };
     }
 
@@ -98,4 +113,10 @@ public abstract class MockOrientationHelper {
     public abstract int getDecoratedStart(View child);
 
     public abstract int getStartAfterPadding();
+
+    public abstract int getEnd();
+
+    public abstract int getEndPadding();
+
+    public abstract int getTotalSpace();
 }
