@@ -47,6 +47,7 @@ public class MockRecyclerView extends ViewGroup {
     public static final int SCROLL_STATE_DRAGGING = 1;
     public static final int NO_POSITION = -1;
     private int mTouchSlop;
+    private int mInterceptRequestLayoutDepth = 0;
 
     public MockRecyclerView(Context context) {
         this(context, (AttributeSet) null);
@@ -66,6 +67,15 @@ public class MockRecyclerView extends ViewGroup {
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         this.dispatchLayout();
+    }
+
+    @Override
+    public void requestLayout() {
+        if (mInterceptRequestLayoutDepth == 0 ) {
+            super.requestLayout();
+        } else {
+//            mLayoutWasDefered = true;
+        }
     }
 
     @Override
@@ -152,17 +162,29 @@ public class MockRecyclerView extends ViewGroup {
     }
 
     void scrollStep(int dx, int dy, @Nullable int[] consumed) {
+        startInterceptRequestLayout();
         int consumedX = 0;
         int consumedY = 0;
         if (dy != 0) {
             consumedY = mLayout.scrollVerticallyBy(dy, mRecycler, mState);
         }
+        stopInterceptRequestLayout(false);
         if (consumed != null) {
             consumed[0] = consumedX;
             consumed[1] = consumedY;
         }
     }
 
+    private void stopInterceptRequestLayout(boolean performLayoutChildren) {
+        mInterceptRequestLayoutDepth--;
+    }
+
+    void startInterceptRequestLayout() {
+        mInterceptRequestLayoutDepth++;
+//        if (mInterceptRequestLayoutDepth == 1 && !mLayoutFrozen) {
+//            mLayoutWasDefered = false;
+//        }
+    }
     public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow,
                                            int type) {
         return getScrollingChildHelper().dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow,
@@ -224,8 +246,6 @@ public class MockRecyclerView extends ViewGroup {
             @Override
             public void addView(View child, int index) {
                 MockRecyclerView.this.addView(child, index);
-                child.setTag("add Index:" + (MockRecyclerView.this.getChildCount() - 1));
-                Log.e("xie", "add Index:" + (MockRecyclerView.this.getChildCount() - 1));
             }
 
             @Override
@@ -237,7 +257,6 @@ public class MockRecyclerView extends ViewGroup {
             @Override
             public void removeViewAt(int index) {
 //                final View child = MockRecyclerView.this.getChildAt(index);
-                Log.e("xie", "removeViewAt:"+index);
                 MockRecyclerView.this.removeViewAt(index);
             }
 
@@ -565,7 +584,6 @@ public class MockRecyclerView extends ViewGroup {
                 }
             } else if (child.getParent() == mRecyclerView) { // it was not a scrap but a valid child
                 // ensure in correct position
-                Log.e("xie", "change...:" + "getParent() == mRecyclerView");
 //                int currentIndex = mChildHelper.indexOfChild(child);
 //                if (index == -1) {
 //                    index = mChildHelper.getChildCount();
@@ -860,7 +878,6 @@ public class MockRecyclerView extends ViewGroup {
             final ViewHolder viewHolder = getChildViewHolderInt(view);
 
             if (viewHolder.isInvalid() && !viewHolder.isRemoved()) {
-                Log.e("xie", "removeView...");
                 removeViewAt(index);
                 recycler.recycleViewHolderInternal(viewHolder);
             } else {

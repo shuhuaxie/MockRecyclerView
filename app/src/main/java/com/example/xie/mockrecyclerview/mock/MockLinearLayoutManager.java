@@ -36,7 +36,6 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         //先将view撤下来
         detachAndScrapAttachedViews(recycler);
         updateLayoutStateToFillEnd(mAnchorInfo);
-        Log.e("xie", "onLayoutChildren");
         this.fill(recycler, this.mLayoutState, state, false);
     }
 
@@ -87,10 +86,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             recycleByLayoutState(recycler, layoutState);
         }
         int remainingSpace = layoutState.mAvailable + layoutState.mExtra;
-        Log.e("xie", "layoutState.mAvailable:" + layoutState.mAvailable);
-        Log.e("xie", "layoutState.mExtra:" + layoutState.mExtra);
         LayoutChunkResult layoutChunkResult = this.mLayoutChunkResult;
-        Log.e("xie", "layoutChunk-----------start: " + remainingSpace);
         while ((layoutState.mInfinite || remainingSpace > 0) && layoutState.hasMore(state)) {
             layoutChunkResult.resetInternal();
             this.layoutChunk(recycler, state, layoutState, layoutChunkResult);
@@ -110,7 +106,6 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
                 recycleByLayoutState(recycler, layoutState);
             }
         }
-        Log.e("xie", "layoutChunk-----------end");
         return start - layoutState.mAvailable;
     }
 
@@ -139,7 +134,6 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             View child = getChildAt(i);
             if (mOrientationHelper.getDecoratedStart(child) < limit) {
                 // stop here
-                Log.e("xie", "End recycleChildren:" + (childCount - 1) + "-" + i);
                 recycleChildren(recycler, childCount - 1, i);
                 return;
             }
@@ -164,7 +158,6 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             View child = getChildAt(i);
             if (mOrientationHelper.getDecoratedEnd(child) > limit) {
                 // stop here  Start recycleChildren:0-9
-                Log.e("xie", "Start recycleChildren:" + 0 + "-" + i);
                 recycleChildren(recycler, 0, i);
                 return;
             }
@@ -212,22 +205,14 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             mLayoutState.mExtra += mOrientationHelper.getStartAfterPadding();
             mLayoutState.mItemDirection = LayoutState.ITEM_DIRECTION_HEAD;
             mLayoutState.mCurrentPosition = getPosition(child) + mLayoutState.mItemDirection;
+            mLayoutState.mOffset = mOrientationHelper.getDecoratedStart(child);
             scrollingOffset = -mOrientationHelper.getDecoratedStart(child)
                     + mOrientationHelper.getStartAfterPadding(); //
-            Log.e("xie", "para 1:" + mOrientationHelper.getDecoratedStart(child));
-            Log.e("xie", "para 2:" + mOrientationHelper.getStartAfterPadding());
-
-            for (int i = 0; i < getChildCount(); i++) {
-                Log.e("xie", "tag:" + getChildAt(i).getTag());
-                Log.e("xie", i + " _ decoratedStart:" +
-                        mOrientationHelper.getDecoratedStart(getChildAt(i)));
-            }
         }
         mLayoutState.mAvailable = requiredSpace; // 17
         if (canUseExistingSpace) {
             mLayoutState.mAvailable -= scrollingOffset;
         }
-        Log.e("xie", "scrollingOffset:" + scrollingOffset);
         mLayoutState.mScrollingOffset = scrollingOffset; // 0
     }
 
@@ -277,7 +262,6 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
                 top = layoutState.mOffset;
                 bottom = layoutState.mOffset + result.mConsumed;
             }
-            Log.e("xie", "top:" + top);
             left = 0;
             right = left + mOrientationHelper.getDecoratedMeasurementInOther(view);
             layoutDecoratedWithMargins(view, left, top, right, bottom);
@@ -312,14 +296,10 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
                 + fill(recycler, mLayoutState, state, false);//consumed:0 mLayoutState.mScrollingOffset:0 dy:17 scrolled:0
         //consumed:-986 mLayoutState.mScrollingOffset:-986 dy:-30
         //consumed:43 mLayoutState.mScrollingOffset:43 dy:2 scrolled:2
-        Log.e("xie", "consumed:" + consumed);
-        Log.e("xie", "mLayoutState.mScrollingOffset:" + mLayoutState.mScrollingOffset);
-        Log.e("xie", "dy:" + dy);
         if (consumed < 0) {
             return 0;
         }
         final int scrolled = absDy > consumed ? layoutDirection * consumed : dy;
-        Log.e("xie", "scrolled:" + scrolled);
 
         mOrientationHelper.offsetChildren(-scrolled);
         return scrolled;
