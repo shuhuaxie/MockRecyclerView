@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
 
+import android.widget.Toast;
 import com.example.xie.mockrecyclerview.mock.MockAdapter;
 import com.example.xie.mockrecyclerview.mock.MockLinearLayoutManager;
 import com.example.xie.mockrecyclerview.mock.MockRecyclerView;
@@ -116,9 +117,11 @@ public class MainActivity extends Activity {
         findViewById(R.id.ll_top).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mInfos.get(0).setName("  Happiness");
+                mInfos.get(0).setName(" *Happiness* ");
+                mInfos.get(12).setName(" *Happiness* ");
                 mReal.getAdapter().notifyDataSetChanged();
                 mMock.getAdapter().notifyDataSetChanged();
+                Toast.makeText(MainActivity.this,"notifyDataSetChanged", Toast.LENGTH_SHORT).show();
             }
         });
     }
