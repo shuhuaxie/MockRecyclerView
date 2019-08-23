@@ -1,6 +1,7 @@
 package com.example.xie.mockrecyclerview.mock;
 
 import android.content.Context;
+import android.database.Observable;
 import android.graphics.Rect;
 import android.os.Build;
 import android.util.AttributeSet;
@@ -68,6 +69,8 @@ public class MockRecyclerView extends ViewGroup {
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         this.dispatchLayout();
     }
+
+    private final RecyclerViewDataObserver mObserver = new RecyclerViewDataObserver();
 
     @Override
     public void requestLayout() {
@@ -221,7 +224,17 @@ public class MockRecyclerView extends ViewGroup {
     }
 
     public void setAdapter(Adapter adapter) {
+//        mAdapter = adapter;
+        setAdapterInternal(adapter, false, true);
+        requestLayout();
+    }
+
+    private void setAdapterInternal(@Nullable MockRecyclerView.Adapter adapter, boolean compatibleWithPrevious,
+                                    boolean removeAndRecycleViews) {
         mAdapter = adapter;
+        if (adapter != null) {
+            adapter.registerAdapterDataObserver(mObserver);
+        }
     }
 
     public void setLayoutManager(MockLinearLayoutManager layoutManager) {
@@ -279,7 +292,14 @@ public class MockRecyclerView extends ViewGroup {
         }
     }
 
+    public Adapter getAdapter() {
+        return mAdapter;
+    }
+
     public abstract static class Adapter<VH extends MockRecyclerView.ViewHolder> {
+        private final MockRecyclerView.AdapterDataObservable mObservable =
+                new MockRecyclerView.AdapterDataObservable();
+
         @NonNull
         public abstract VH onCreateViewHolder(@NonNull ViewGroup var1, int var2);
 
@@ -307,12 +327,22 @@ public class MockRecyclerView extends ViewGroup {
             holder.mPosition = position;
             onBindViewHolder(holder, position);
         }
+
+        public final void notifyDataSetChanged() {
+            mObservable.notifyChanged();
+        }
+
+        public void registerAdapterDataObserver(@NonNull RecyclerView.AdapterDataObserver observer) {
+            mObservable.registerObserver(observer);
+        }
     }
 
     public static class State {
         int mItemCount = 0;
         boolean mInPreLayout = false;
-        /** Owned by SmoothScroller */
+        /**
+         * Owned by SmoothScroller
+         */
         private int mTargetPosition = RecyclerView.NO_POSITION;
 
         public int getItemCount() {
@@ -944,5 +974,24 @@ public class MockRecyclerView extends ViewGroup {
             mScrollingChildHelper = new NestedScrollingChildHelper(this);
         }
         return mScrollingChildHelper;
+    }
+
+    static class AdapterDataObservable extends Observable<RecyclerView.AdapterDataObserver> {
+
+        public void notifyChanged() {
+            for (int i = mObservers.size() - 1; i >= 0; i--) {
+                mObservers.get(i).onChanged();
+            }
+        }
+    }
+
+    private class RecyclerViewDataObserver extends RecyclerView.AdapterDataObserver {
+        RecyclerViewDataObserver() {
+        }
+
+        @Override
+        public void onChanged() {
+            requestLayout();
+        }
     }
 }

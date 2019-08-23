@@ -112,6 +112,15 @@ public class MainActivity extends Activity {
 
         mMock.setLayoutManager(new MockLinearLayoutManager(this));
         mMock.setAdapter(new MockAdapter(mInfos,this));
+
+        findViewById(R.id.ll_top).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mInfos.get(0).setName("  Happiness");
+                mReal.getAdapter().notifyDataSetChanged();
+                mMock.getAdapter().notifyDataSetChanged();
+            }
+        });
     }
 
     public static class SimpleViewHolder extends RecyclerView.ViewHolder{
