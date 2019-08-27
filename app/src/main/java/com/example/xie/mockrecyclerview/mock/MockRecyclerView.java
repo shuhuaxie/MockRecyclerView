@@ -507,6 +507,22 @@ public class MockRecyclerView extends ViewGroup {
             }
             recycleViewHolderInternal(holder);
         }
+
+        public void markKnownViewsInvalid() {
+            final int cachedCount = mCachedViews.size();
+            for (int i = 0; i < cachedCount; i++) {
+                final ViewHolder holder = mCachedViews.get(i);
+                if (holder != null) {
+                    holder.addFlags(ViewHolder.FLAG_UPDATE | ViewHolder.FLAG_INVALID);
+//                    holder.addChangePayload(null);
+                }
+            }
+
+//            if (mAdapter == null) {
+//                // we cannot re-use cached views in this case. Recycle them all
+//                recycleAndClearCachedViews();
+//            }
+        }
     }
 
     static ViewHolder getChildViewHolderInt(View child) {
@@ -991,7 +1007,22 @@ public class MockRecyclerView extends ViewGroup {
 
         @Override
         public void onChanged() {
+            processDataSetCompletelyChanged(true);
             requestLayout();
+        }
+        void processDataSetCompletelyChanged(boolean dispatchItemsChanged) {
+            markKnownViewsInvalid();
+        }
+        void markKnownViewsInvalid() {
+            final int childCount = mChildHelper.getUnfilteredChildCount();
+            for (int i = 0; i < childCount; i++) {
+                final ViewHolder holder = getChildViewHolderInt(mChildHelper.getUnfilteredChildAt(i));
+                if (holder != null ) {
+                    holder.addFlags(ViewHolder.FLAG_UPDATE | ViewHolder.FLAG_INVALID);
+                }
+            }
+//            markItemDecorInsetsDirty();
+            mRecycler.markKnownViewsInvalid();
         }
     }
 }

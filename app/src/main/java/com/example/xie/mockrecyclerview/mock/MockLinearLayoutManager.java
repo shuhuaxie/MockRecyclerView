@@ -15,6 +15,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     public static final int HORIZONTAL = RecyclerView.HORIZONTAL;
     public static final int VERTICAL = RecyclerView.VERTICAL;
     int mOrientation = MockRecyclerView.DEFAULT_ORIENTATION;
+    public static final int INVALID_OFFSET = Integer.MIN_VALUE;
     boolean mShouldReverseLayout = false;
     /**
      * Re-used variable to keep anchor information on re-layout.
@@ -33,10 +34,90 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     public void onLayoutChildren(MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
         ensureLayoutState();
         mLayoutState.mItemDirection = 1;
+        if (!mAnchorInfo.mValid) {
+            updateAnchorInfoForLayout(recycler, state, mAnchorInfo);
+            mAnchorInfo.mValid = true;
+        }
         //先将view撤下来
         detachAndScrapAttachedViews(recycler);
         updateLayoutStateToFillEnd(mAnchorInfo);
         this.fill(recycler, this.mLayoutState, state, false);
+        mAnchorInfo.reset();
+    }
+
+    private void updateAnchorInfoForLayout(MockRecyclerView.Recycler recycler, MockRecyclerView.State state,
+                                           AnchorInfo anchorInfo) {
+        if (updateAnchorFromChildren(recycler, state, anchorInfo)) {
+            return;
+        }
+    }
+
+    private boolean updateAnchorFromChildren(MockRecyclerView.Recycler recycler, MockRecyclerView.State state,
+                                             AnchorInfo anchorInfo) {
+        if (getChildCount() == 0) {
+            return false;
+        }
+//        final View focused = getFocusedChild();
+//        if (focused != null && anchorInfo.isViewValidAsAnchor(focused, state)) {
+//            anchorInfo.assignFromViewAndKeepVisibleRect(focused, getPosition(focused));
+//            return true;
+//        }
+//        if (mLastStackFromEnd != mStackFromEnd) {
+//            return false;
+//        }
+        View referenceChild = findReferenceChildClosestToStart(recycler, state);
+        if (referenceChild != null) {
+            anchorInfo.assignFromView(referenceChild, getPosition(referenceChild));
+            // If all visible views are removed in 1 pass, reference child might be out of bounds.
+            // If that is the case, offset it back to 0 so that we use these pre-layout children.
+//            if (!state.isPreLayout() && supportsPredictiveItemAnimations()) {
+//                // validate this child is at least partially visible. if not, offset it to start
+//                final boolean notVisible =
+//                        mOrientationHelper.getDecoratedStart(referenceChild) >= mOrientationHelper
+//                                .getEndAfterPadding()
+//                                || mOrientationHelper.getDecoratedEnd(referenceChild)
+//                                < mOrientationHelper.getStartAfterPadding();
+//                if (notVisible) {
+//                    anchorInfo.mCoordinate = mOrientationHelper.getStartAfterPadding();
+//                }
+//            }
+            return true;
+        }
+        return false;
+    }
+
+    private View findReferenceChildClosestToStart(MockRecyclerView.Recycler recycler,
+                                                  MockRecyclerView.State state) {
+        return findFirstReferenceChild(recycler, state);
+    }
+
+    private View findFirstReferenceChild(MockRecyclerView.Recycler recycler, MockRecyclerView.State state) {
+        return findReferenceChild(recycler, state, 0, getChildCount(), state.getItemCount());
+    }
+
+    View findReferenceChild(MockRecyclerView.Recycler recycler, MockRecyclerView.State state,
+                            int start, int end, int itemCount) {
+        ensureLayoutState();
+        View invalidMatch = null;
+        View outOfBoundsMatch = null;
+        final int boundsStart = mOrientationHelper.getStartAfterPadding();
+        final int boundsEnd = mOrientationHelper.getEndAfterPadding();
+        final int diff = end > start ? 1 : -1;
+        for (int i = start; i != end; i += diff) {
+            final View view = getChildAt(i);
+            final int position = getPosition(view);
+            if (position >= 0 && position < itemCount) {
+                if (mOrientationHelper.getDecoratedStart(view) >= boundsEnd
+                        || mOrientationHelper.getDecoratedEnd(view) < boundsStart) {
+                    if (outOfBoundsMatch == null) {
+                        outOfBoundsMatch = view; // item is not visible, less preferred
+                    }
+                } else {
+                    return view;
+                }
+            }
+        }
+        return outOfBoundsMatch;
     }
 
     private void updateLayoutStateToFillEnd(AnchorInfo anchorInfo) {
@@ -57,8 +138,22 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     }
 
     static class AnchorInfo {
+        MockOrientationHelper mOrientationHelper;
+        public boolean mValid;
         int mPosition;
         int mCoordinate;
+
+        public void assignFromView(View child, int position) {
+
+            mCoordinate = mOrientationHelper.getDecoratedStart(child);
+            mPosition = position;
+        }
+
+        public void reset() {
+            mPosition = RecyclerView.NO_POSITION;
+            mCoordinate = INVALID_OFFSET;
+            mValid = false;
+        }
     }
 
     @Override
@@ -199,7 +294,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             mLayoutState.mCurrentPosition = getPosition(child) + mLayoutState.mItemDirection;
             mLayoutState.mOffset = mOrientationHelper.getDecoratedEnd(child);
             scrollingOffset = mOrientationHelper.getDecoratedEnd(child)
-                    - mOrientationHelper.getEndAfterPadding();// 121 = 1353 - 1232  // 118 = 1350 - 1232
+                    - mOrientationHelper.getEndAfterPadding();
         } else {
             final View child = getChildClosestToStart();
             mLayoutState.mExtra += mOrientationHelper.getStartAfterPadding();
@@ -207,13 +302,13 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             mLayoutState.mCurrentPosition = getPosition(child) + mLayoutState.mItemDirection;
             mLayoutState.mOffset = mOrientationHelper.getDecoratedStart(child);
             scrollingOffset = -mOrientationHelper.getDecoratedStart(child)
-                    + mOrientationHelper.getStartAfterPadding(); //
+                    + mOrientationHelper.getStartAfterPadding();
         }
-        mLayoutState.mAvailable = requiredSpace; // 17
+        mLayoutState.mAvailable = requiredSpace;
         if (canUseExistingSpace) {
             mLayoutState.mAvailable -= scrollingOffset;
         }
-        mLayoutState.mScrollingOffset = scrollingOffset; // 0
+        mLayoutState.mScrollingOffset = scrollingOffset;
     }
 
     public int getPosition(@NonNull View view) {
@@ -292,15 +387,12 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
         final int layoutDirection = dy > 0 ? LayoutState.LAYOUT_END : LayoutState.LAYOUT_START;
         final int absDy = Math.abs(dy);
         updateLayoutState(layoutDirection, absDy, true, state);
-        final int consumed = mLayoutState.mScrollingOffset //0 +0 = 0;
-                + fill(recycler, mLayoutState, state, false);//consumed:0 mLayoutState.mScrollingOffset:0 dy:17 scrolled:0
-        //consumed:-986 mLayoutState.mScrollingOffset:-986 dy:-30
-        //consumed:43 mLayoutState.mScrollingOffset:43 dy:2 scrolled:2
+        final int consumed = mLayoutState.mScrollingOffset
+                + fill(recycler, mLayoutState, state, false);
         if (consumed < 0) {
             return 0;
         }
         final int scrolled = absDy > consumed ? layoutDirection * consumed : dy;
-
         mOrientationHelper.offsetChildren(-scrolled);
         return scrolled;
     }
@@ -313,6 +405,7 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
     public void setOrientation(int orientation) {
         mOrientationHelper =
                 MockOrientationHelper.createOrientationHelper(this, orientation);
+        mAnchorInfo.mOrientationHelper = mOrientationHelper;
         mOrientation = orientation;
     }
 

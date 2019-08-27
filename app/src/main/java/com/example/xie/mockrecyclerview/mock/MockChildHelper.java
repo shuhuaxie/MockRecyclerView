@@ -37,6 +37,14 @@ public class MockChildHelper {
         mCallback.removeViewAt(offset);
     }
 
+    public int getUnfilteredChildCount() {
+        return mCallback.getChildCount();
+    }
+
+    public View getUnfilteredChildAt(int i) {
+        return mCallback.getChildAt(i);
+    }
+
     interface Callback {
         int getChildCount();
 
