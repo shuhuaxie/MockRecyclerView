@@ -325,6 +325,9 @@ public class MockRecyclerView extends ViewGroup {
 
         public void bindViewHolder(VH holder, int position) {
             holder.mPosition = position;
+            holder.setFlags(ViewHolder.FLAG_BOUND,
+                    ViewHolder.FLAG_BOUND | ViewHolder.FLAG_UPDATE | ViewHolder.FLAG_INVALID
+                            | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN);
             onBindViewHolder(holder, position);
         }
 
@@ -547,6 +550,7 @@ public class MockRecyclerView extends ViewGroup {
         static final int FLAG_UPDATE = 1 << 1;
         static final int FLAG_INVALID = 1 << 2;
         static final int FLAG_REMOVED = 1 << 3;
+        static final int FLAG_ADAPTER_POSITION_UNKNOWN = 1 << 9;
         int mPosition = NO_POSITION;
 
         boolean isScrap() {
