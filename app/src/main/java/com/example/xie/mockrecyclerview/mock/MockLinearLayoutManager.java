@@ -51,7 +51,9 @@ public class MockLinearLayoutManager extends MockRecyclerView.MockLayoutManager 
             return;
         }
     }
-
+    public boolean supportsPredictiveItemAnimations() {
+        return true;
+    }
     private boolean updateAnchorFromChildren(MockRecyclerView.Recycler recycler, MockRecyclerView.State state,
                                              AnchorInfo anchorInfo) {
         if (getChildCount() == 0) {

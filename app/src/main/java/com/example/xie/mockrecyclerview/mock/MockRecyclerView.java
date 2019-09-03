@@ -6,6 +6,7 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -17,13 +18,13 @@ import androidx.annotation.Nullable;
 import androidx.annotation.Px;
 import androidx.core.view.NestedScrollingChildHelper;
 import androidx.core.view.ViewCompat;
+import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
 
-import static androidx.core.view.ViewCompat.TYPE_TOUCH;
-
 public class MockRecyclerView extends ViewGroup {
+    public static final int INVALID_TYPE = -1;
     private MockLayoutManager mLayout;
     private Adapter mAdapter;
     private MockChildHelper mChildHelper;
@@ -43,12 +44,15 @@ public class MockRecyclerView extends ViewGroup {
     final int[] mScrollConsumed = new int[2];
     private final int[] mNestedOffsets = new int[2];
     private int mScrollState = SCROLL_STATE_IDLE;
-
+    MockAdapterHelper mAdapterHelper;
     public static final int SCROLL_STATE_IDLE = 0;
     public static final int SCROLL_STATE_DRAGGING = 1;
     public static final int NO_POSITION = -1;
     private int mTouchSlop;
     private int mInterceptRequestLayoutDepth = 0;
+    boolean mAdapterUpdateDuringMeasure;
+    boolean mItemsChanged = false;
+    RecyclerView.ItemAnimator mItemAnimator = new DefaultItemAnimator();
 
     public MockRecyclerView(Context context) {
         this(context, (AttributeSet) null);
@@ -60,9 +64,65 @@ public class MockRecyclerView extends ViewGroup {
 
     public MockRecyclerView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        this.initChildrenHelper();
+        initAdapterManager();
+        initChildrenHelper();
         final ViewConfiguration vc = ViewConfiguration.get(context);
         mTouchSlop = vc.getScaledTouchSlop();
+    }
+
+    private void initAdapterManager() {
+        mAdapterHelper = new MockAdapterHelper(new MockAdapterHelper.Callback() {
+
+            @Override
+            public ViewHolder findViewHolder(int position) {
+                return null;
+            }
+
+            @Override
+            public void offsetPositionsForRemovingInvisible(int positionStart, int itemCount) {
+
+            }
+
+            @Override
+            public void offsetPositionsForRemovingLaidOutOrNewView(int positionStart, int itemCount) {
+
+            }
+
+            @Override
+            public void markViewHoldersUpdated(int positionStart, int itemCount, Object payload) {
+                viewRangeUpdate(positionStart, itemCount, payload);
+                mItemsChanged = true;
+            }
+
+            @Override
+            public void onDispatchFirstPass(MockAdapterHelper.UpdateOp updateOp) {
+
+            }
+
+            @Override
+            public void onDispatchSecondPass(MockAdapterHelper.UpdateOp op) {
+                dispatchUpdate(op);
+            }
+
+            @Override
+            public void offsetPositionsForAdd(int positionStart, int itemCount) {
+
+            }
+
+            @Override
+            public void offsetPositionsForMove(int from, int to) {
+
+            }
+
+            void dispatchUpdate(MockAdapterHelper.UpdateOp op) {
+                switch (op.cmd) {
+                    case MockAdapterHelper.UpdateOp.UPDATE:
+                        mLayout.onItemsUpdated(MockRecyclerView.this, op.positionStart, op.itemCount,
+                                op.payload);
+                        break;
+                }
+            }
+        });
     }
 
     @Override
@@ -70,11 +130,30 @@ public class MockRecyclerView extends ViewGroup {
         this.dispatchLayout();
     }
 
+    void viewRangeUpdate(int positionStart, int itemCount, Object payload) {
+        final int childCount = mChildHelper.getUnfilteredChildCount();
+        final int positionEnd = positionStart + itemCount;
+
+        for (int i = 0; i < childCount; i++) {
+            final View child = mChildHelper.getUnfilteredChildAt(i);
+            final ViewHolder holder = getChildViewHolderInt(child);
+            if (holder.mPosition >= positionStart && holder.mPosition < positionEnd) {
+                // We re-bind these view holders after pre-processing is complete so that
+                // ViewHolders have their final positions assigned.
+                holder.addFlags(ViewHolder.FLAG_UPDATE);
+            }
+        }
+    }
+
+    public RecycledViewPool getRecycledViewPool() {
+        return mRecycler.getRecycledViewPool();
+    }
+
     private final RecyclerViewDataObserver mObserver = new RecyclerViewDataObserver();
 
     @Override
     public void requestLayout() {
-        if (mInterceptRequestLayoutDepth == 0 ) {
+        if (mInterceptRequestLayoutDepth == 0) {
             super.requestLayout();
         } else {
 //            mLayoutWasDefered = true;
@@ -188,6 +267,7 @@ public class MockRecyclerView extends ViewGroup {
 //            mLayoutWasDefered = false;
 //        }
     }
+
     public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow,
                                            int type) {
         return getScrollingChildHelper().dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow,
@@ -195,7 +275,23 @@ public class MockRecyclerView extends ViewGroup {
     }
 
     private void dispatchLayoutStep1() {
+        processAdapterUpdatesAndSetAnimationFlags();
+        mState.mInPreLayout = mState.mRunPredictiveAnimations;
         mState.mItemCount = mAdapter.getItemCount();
+    }
+
+    private void processAdapterUpdatesAndSetAnimationFlags() {
+        if (predictiveItemAnimationsEnabled()) {
+            mAdapterHelper.preProcess();
+        } else {
+            mAdapterHelper.consumeUpdatesInOnePass();
+        }
+        boolean animationTypeSupported = mItemsChanged;
+        mState.mRunPredictiveAnimations = animationTypeSupported;
+    }
+
+    private boolean predictiveItemAnimationsEnabled() {
+        return (mItemAnimator != null && mLayout.supportsPredictiveItemAnimations());
     }
 
     void defaultOnMeasure(int widthSpec, int heightSpec) {
@@ -212,10 +308,12 @@ public class MockRecyclerView extends ViewGroup {
     }
 
     private void dispatchLayout() {
+        dispatchLayoutStep1();
         dispatchLayoutStep2();
     }
 
     private void dispatchLayoutStep2() {
+        mAdapterHelper.consumeUpdatesInOnePass();
         this.mLayout.onLayoutChildren(this.mRecycler, this.mState);
     }
 
@@ -239,7 +337,7 @@ public class MockRecyclerView extends ViewGroup {
 
     public void setLayoutManager(MockLinearLayoutManager layoutManager) {
         mLayout = layoutManager;
-        this.mLayout.setRecyclerView(this);
+        mLayout.setRecyclerView(this);
     }
 
     Rect getItemDecorInsetsForChild(View child) {
@@ -250,7 +348,7 @@ public class MockRecyclerView extends ViewGroup {
     }
 
     private void initChildrenHelper() {
-        this.mChildHelper = new MockChildHelper(new MockChildHelper.Callback() {
+        mChildHelper = new MockChildHelper(new MockChildHelper.Callback() {
             @Override
             public int getChildCount() {
                 return MockRecyclerView.this.getChildCount();
@@ -299,6 +397,7 @@ public class MockRecyclerView extends ViewGroup {
     public abstract static class Adapter<VH extends MockRecyclerView.ViewHolder> {
         private final MockRecyclerView.AdapterDataObservable mObservable =
                 new MockRecyclerView.AdapterDataObservable();
+        int mItemViewType = INVALID_TYPE;
 
         @NonNull
         public abstract VH onCreateViewHolder(@NonNull ViewGroup var1, int var2);
@@ -318,7 +417,7 @@ public class MockRecyclerView extends ViewGroup {
 
 
         public int getItemViewType(int position) {
-            return 0;
+            return mItemViewType;
         }
 
         public abstract int getItemCount();
@@ -335,12 +434,17 @@ public class MockRecyclerView extends ViewGroup {
             mObservable.notifyChanged();
         }
 
+        public final void notifyItemRangeChanged(int positionStart, int itemCount) {
+            mObservable.notifyItemRangeChanged(positionStart, itemCount);
+        }
+
         public void registerAdapterDataObserver(@NonNull RecyclerView.AdapterDataObserver observer) {
             mObservable.registerObserver(observer);
         }
     }
 
     public static class State {
+        public boolean mRunPredictiveAnimations = false;
         int mItemCount = 0;
         boolean mInPreLayout = false;
         /**
@@ -375,6 +479,12 @@ public class MockRecyclerView extends ViewGroup {
 
         final ArrayList<ViewHolder> mCachedViews = new ArrayList<>();
 
+        private int mRequestedCacheMax = DEFAULT_CACHE_SIZE;
+        int mViewCacheMax = DEFAULT_CACHE_SIZE;
+        RecycledViewPool mRecyclerPool;
+
+        static final int DEFAULT_CACHE_SIZE = 2;
+
         @NonNull
         public View getViewForPosition(int position) {
             return this.getViewForPosition(position, false);
@@ -387,14 +497,13 @@ public class MockRecyclerView extends ViewGroup {
         @Nullable
         ViewHolder tryGetViewHolderForPositionByDeadline(int position, boolean dryRun, long deadlineNs) {
             if (position >= 0 && position < MockRecyclerView.this.mState.getItemCount()) {
-                int type;
-                int offsetPosition = 0;
+
                 ViewHolder holder = null;
                 // 0) If there is a changed scrap, try to find from there
-                // 动画预加载View,暂时忽略
+                boolean fromScrapOrHiddenOrCache = false;
                 if (mState.isPreLayout()) {
-//                    holder = getChangedScrapViewForPosition(position);
-//                    fromScrapOrHiddenOrCache = holder != null;
+                    holder = getChangedScrapViewForPosition(position);
+                    fromScrapOrHiddenOrCache = holder != null;
                 }
                 if (holder == null) {
                     holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);
@@ -402,12 +511,25 @@ public class MockRecyclerView extends ViewGroup {
 
                     }
                 }
+                if (holder == null) { // fallback to pool
+                    int offsetPosition = mAdapterHelper.findPositionOffset(position);
+                    int type = mAdapter.getItemViewType(offsetPosition);
+                    holder = getRecycledViewPool().getRecycledView(type);
+                    if (holder != null) {
+                        holder.resetInternal();
+                    }
 
-                if (holder == null) {
-                    type = MockRecyclerView.this.mAdapter.getItemViewType(offsetPosition);
-                    holder = MockRecyclerView.this.mAdapter.createViewHolder(MockRecyclerView.this, type);
+                    if (holder == null) {
+                        type = MockRecyclerView.this.mAdapter.getItemViewType(offsetPosition);
+                        holder = MockRecyclerView.this.mAdapter.createViewHolder(MockRecyclerView.this, type);
+                    }
                 }
+//                if (mState.isPreLayout() && holder.isBound()) {
+//                    // do not update unless we absolutely have to.
+//                    holder.mPreLayoutPosition = position;
+//                } else
                 if (!holder.isBound() || holder.needsUpdate() || holder.isInvalid()) {
+                    final int offsetPosition = mAdapterHelper.findPositionOffset(position);
                     tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);
                 }
 
@@ -431,6 +553,24 @@ public class MockRecyclerView extends ViewGroup {
 
         }
 
+        ViewHolder getChangedScrapViewForPosition(int position) {
+            // If pre-layout, check the changed scrap for an exact match.
+            final int changedScrapSize;
+            if (mChangedScrap == null || (changedScrapSize = mChangedScrap.size()) == 0) {
+                return null;
+            }
+            // find by position
+            for (int i = 0; i < changedScrapSize; i++) {
+                final ViewHolder holder = mChangedScrap.get(i);
+                if (!holder.wasReturnedFromScrap() && holder.getLayoutPosition() == position) {
+                    holder.addFlags(ViewHolder.FLAG_RETURNED_FROM_SCRAP);
+                    return holder;
+                }
+            }
+
+            return null;
+        }
+
         ViewHolder getScrapOrHiddenOrCachedHolderForPosition(int position, boolean dryRun) {
             final int scrapCount = mAttachedScrap.size();
 
@@ -452,13 +592,30 @@ public class MockRecyclerView extends ViewGroup {
                     if (!dryRun) {
                         mCachedViews.remove(i);
                     }
+                    Log.e("xie", "return cacheSize holder...");
                     return holder;
                 }
             }
             return null;
         }
 
+        void recycleCachedViewAt(int cachedViewIndex) {
+            ViewHolder viewHolder = mCachedViews.get(cachedViewIndex);
+            addViewHolderToRecycledViewPool(viewHolder, true);
+            mCachedViews.remove(cachedViewIndex);
+        }
+
+        void addViewHolderToRecycledViewPool(@NonNull ViewHolder holder, boolean dispatchRecycled) {
+            if (holder.hasAnyOfTheFlags(ViewHolder.FLAG_SET_A11Y_ITEM_DELEGATE)) {
+                holder.setFlags(0, ViewHolder.FLAG_SET_A11Y_ITEM_DELEGATE);
+                ViewCompat.setAccessibilityDelegate(holder.itemView, null);
+            }
+            holder.mOwnerRecyclerView = null;
+            getRecycledViewPool().putRecycledView(holder);
+        }
+
         private void tryBindViewHolderByDeadline(ViewHolder holder, int offsetPosition, int position, long deadlineNs) {
+            holder.mOwnerRecyclerView = MockRecyclerView.this;
             mAdapter.bindViewHolder(holder, position);
         }
 
@@ -494,9 +651,26 @@ public class MockRecyclerView extends ViewGroup {
         }
 
         void recycleViewHolderInternal(ViewHolder holder) {
-            int cachedViewSize = mCachedViews.size();
-            int targetCacheIndex = cachedViewSize;
-            mCachedViews.add(targetCacheIndex, holder);
+            boolean cached = false;
+            boolean recycled = false;
+            if (mViewCacheMax > 0
+                    && !holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID
+                    | ViewHolder.FLAG_REMOVED
+                    | ViewHolder.FLAG_UPDATE
+                    | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN)) {
+                int cachedViewSize = mCachedViews.size();
+                if (cachedViewSize >= mViewCacheMax && cachedViewSize > 0) {
+                    recycleCachedViewAt(0);
+                    cachedViewSize--;
+                }
+                int targetCacheIndex = cachedViewSize;
+                mCachedViews.add(targetCacheIndex, holder);
+                cached = true;
+            }
+            if (!cached) {
+                addViewHolderToRecycledViewPool(holder, true);
+                recycled = true;
+            }
         }
 
         public void recycleView(@NonNull View view) {
@@ -520,11 +694,13 @@ public class MockRecyclerView extends ViewGroup {
 //                    holder.addChangePayload(null);
                 }
             }
+        }
 
-//            if (mAdapter == null) {
-//                // we cannot re-use cached views in this case. Recycle them all
-//                recycleAndClearCachedViews();
-//            }
+        RecycledViewPool getRecycledViewPool() {
+            if (mRecyclerPool == null) {
+                mRecyclerPool = new RecycledViewPool();
+            }
+            return mRecyclerPool;
         }
     }
 
@@ -543,6 +719,7 @@ public class MockRecyclerView extends ViewGroup {
         static final int FLAG_RETURNED_FROM_SCRAP = 1 << 5;
         @NonNull
         public final View itemView;
+        public int mPreLayoutPosition;
         Recycler mScrapContainer = null;
         int mFlags;
         boolean mInChangeScrap = false;
@@ -551,7 +728,10 @@ public class MockRecyclerView extends ViewGroup {
         static final int FLAG_INVALID = 1 << 2;
         static final int FLAG_REMOVED = 1 << 3;
         static final int FLAG_ADAPTER_POSITION_UNKNOWN = 1 << 9;
+        static final int FLAG_SET_A11Y_ITEM_DELEGATE = 1 << 14;
         int mPosition = NO_POSITION;
+        int mItemViewType = INVALID_TYPE;
+        MockRecyclerView mOwnerRecyclerView;
 
         boolean isScrap() {
             return mScrapContainer != null;
@@ -590,6 +770,10 @@ public class MockRecyclerView extends ViewGroup {
             return (mFlags & FLAG_BOUND) != 0;
         }
 
+        void setFlags(int flags, int mask) {
+            mFlags = (mFlags & ~mask) | (flags & mask);
+        }
+
         boolean isRemoved() {
             return (mFlags & FLAG_REMOVED) != 0;
         }
@@ -608,6 +792,15 @@ public class MockRecyclerView extends ViewGroup {
 
         void addFlags(int flags) {
             mFlags |= flags;
+        }
+
+        public final int getItemViewType() {
+            return mItemViewType;
+        }
+
+        void resetInternal() {
+            mFlags = 0;
+            mPosition = NO_POSITION;
         }
     }
 
@@ -943,6 +1136,19 @@ public class MockRecyclerView extends ViewGroup {
         }
 
         public abstract LayoutParams generateDefaultLayoutParams();
+
+        public boolean supportsPredictiveItemAnimations() {
+            return false;
+        }
+
+        public void onItemsUpdated(@NonNull MockRecyclerView recyclerView, int positionStart,
+                                   int itemCount, @Nullable Object payload) {
+            onItemsUpdated(recyclerView, positionStart, itemCount);
+        }
+
+        private void onItemsUpdated(MockRecyclerView recyclerView, int positionStart, int itemCount) {
+
+        }
     }
 
 
@@ -1003,6 +1209,21 @@ public class MockRecyclerView extends ViewGroup {
                 mObservers.get(i).onChanged();
             }
         }
+
+        public void notifyItemRangeChanged(int positionStart, int itemCount) {
+            notifyItemRangeChanged(positionStart, itemCount, null);
+        }
+
+        public void notifyItemRangeChanged(int positionStart, int itemCount,
+                                           @Nullable Object payload) {
+            // since onItemRangeChanged() is implemented by the app, it could do anything, including
+            // removing itself from {@link mObservers} - and that could cause problems if
+            // an iterator is used on the ArrayList {@link mObservers}.
+            // to avoid such problems, just march thru the list in the reverse order.
+            for (int i = mObservers.size() - 1; i >= 0; i--) {
+                mObservers.get(i).onItemRangeChanged(positionStart, itemCount, payload);
+            }
+        }
     }
 
     private class RecyclerViewDataObserver extends RecyclerView.AdapterDataObserver {
@@ -1014,19 +1235,82 @@ public class MockRecyclerView extends ViewGroup {
             processDataSetCompletelyChanged(true);
             requestLayout();
         }
+
         void processDataSetCompletelyChanged(boolean dispatchItemsChanged) {
             markKnownViewsInvalid();
         }
+
         void markKnownViewsInvalid() {
             final int childCount = mChildHelper.getUnfilteredChildCount();
             for (int i = 0; i < childCount; i++) {
                 final ViewHolder holder = getChildViewHolderInt(mChildHelper.getUnfilteredChildAt(i));
-                if (holder != null ) {
+                if (holder != null) {
                     holder.addFlags(ViewHolder.FLAG_UPDATE | ViewHolder.FLAG_INVALID);
                 }
             }
 //            markItemDecorInsetsDirty();
             mRecycler.markKnownViewsInvalid();
+        }
+
+        @Override
+        public void onItemRangeChanged(int positionStart, int itemCount, Object payload) {
+            if (mAdapterHelper.onItemRangeChanged(positionStart, itemCount, payload)) {
+                triggerUpdateProcessor();
+            }
+        }
+
+        void triggerUpdateProcessor() {
+            mAdapterUpdateDuringMeasure = true;
+            requestLayout();
+        }
+    }
+
+    public static class RecycledViewPool {
+        private static final int DEFAULT_MAX_SCRAP = 5;
+        SparseArray<ScrapData> mScrap = new SparseArray<>();
+
+        static class ScrapData {
+            final ArrayList<ViewHolder> mScrapHeap = new ArrayList<>();
+            int mMaxScrap = DEFAULT_MAX_SCRAP;
+            long mCreateRunningAverageNs = 0;
+            long mBindRunningAverageNs = 0;
+        }
+
+        public void setMaxRecycledViews(int viewType, int max) {
+            ScrapData scrapData = getScrapDataForType(viewType);
+            scrapData.mMaxScrap = max;
+            final ArrayList<ViewHolder> scrapHeap = scrapData.mScrapHeap;
+            while (scrapHeap.size() > max) {
+                scrapHeap.remove(scrapHeap.size() - 1);
+            }
+        }
+
+        private ScrapData getScrapDataForType(int viewType) {
+            ScrapData scrapData = mScrap.get(viewType);
+            if (scrapData == null) {
+                scrapData = new ScrapData();
+                mScrap.put(viewType, scrapData);
+            }
+            return scrapData;
+        }
+
+        public ViewHolder getRecycledView(int viewType) {
+            final ScrapData scrapData = mScrap.get(viewType);
+            if (scrapData != null && !scrapData.mScrapHeap.isEmpty()) {
+                final ArrayList<ViewHolder> scrapHeap = scrapData.mScrapHeap;
+                return scrapHeap.remove(scrapHeap.size() - 1);
+            }
+            return null;
+        }
+
+        public void putRecycledView(ViewHolder scrap) {
+            final int viewType = scrap.getItemViewType();
+            final ArrayList<ViewHolder> scrapHeap = getScrapDataForType(viewType).mScrapHeap;
+            if (mScrap.get(viewType).mMaxScrap <= scrapHeap.size()) {
+                return;
+            }
+            scrap.resetInternal();
+            scrapHeap.add(scrap);
         }
     }
 }

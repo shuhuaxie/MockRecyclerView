@@ -20,6 +20,8 @@ public class MainActivity extends Activity {
     RecyclerView mReal;
     MockRecyclerView mMock;
     ArrayList<Info> mInfos = new ArrayList<>();
+    int state = 0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -109,25 +111,39 @@ public class MainActivity extends Activity {
         mReal = findViewById(R.id.real_recycler_view);
         mMock = findViewById(R.id.mock_recycler_view);
         mReal.setLayoutManager(new LinearLayoutManager(this));
-        mReal.setAdapter(new SimplyAdapter(mInfos,this));
+        mReal.setAdapter(new SimplyAdapter(mInfos, this));
 
         mMock.setLayoutManager(new MockLinearLayoutManager(this));
-        mMock.setAdapter(new MockAdapter(mInfos,this));
+        mMock.setAdapter(new MockAdapter(mInfos, this));
 
         findViewById(R.id.ll_top).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mInfos.get(0).setName(" *Happiness* ");
-                mInfos.get(12).setName(" *Happiness* ");
-                mReal.getAdapter().notifyDataSetChanged();
-                mMock.getAdapter().notifyDataSetChanged();
-                Toast.makeText(MainActivity.this,"notifyDataSetChanged", Toast.LENGTH_SHORT).show();
+                if (state == 0) {
+                    mInfos.get(0).setName(" *Happiness* ");
+                    mInfos.get(12).setName(" *Happiness* ");
+//                  mReal.getRecycledViewPool().setMaxRecycledViews(RecyclerView.INVALID_TYPE, 10);
+                    mReal.getAdapter().notifyDataSetChanged();
+                    mMock.getRecycledViewPool().setMaxRecycledViews(RecyclerView.INVALID_TYPE, 15);
+                    mMock.getAdapter().notifyDataSetChanged();
+                    Toast.makeText(MainActivity.this, "notifyDataSetChanged", Toast.LENGTH_SHORT).show();
+                    state++;
+                } else if (state == 1) {
+                    mInfos.get(0).setName(" _Happiness_ ");
+                    mInfos.get(1).setName(" _is_ ");
+                    mInfos.get(2).setName(" _a_ ");
+                    mReal.getAdapter().notifyItemRangeChanged(0, 2);
+                    mMock.getAdapter().notifyItemRangeChanged(0, 2);
+                    Toast.makeText(MainActivity.this, "notifyItemRangeChanged", Toast.LENGTH_SHORT).show();
+                    state--;
+                }
             }
         });
     }
 
-    public static class SimpleViewHolder extends RecyclerView.ViewHolder{
+    public static class SimpleViewHolder extends RecyclerView.ViewHolder {
         TextView mTextView;
+
         public SimpleViewHolder(@NonNull View itemView) {
             super(itemView);
             mTextView = itemView.findViewById(R.id.tv_item);
@@ -138,8 +154,10 @@ public class MainActivity extends Activity {
         }
 
     }
-    public static class MockViewHolder extends MockRecyclerView.ViewHolder{
+
+    public static class MockViewHolder extends MockRecyclerView.ViewHolder {
         TextView mTextView;
+
         public MockViewHolder(@NonNull View itemView) {
             super(itemView);
             mTextView = itemView.findViewById(R.id.tv_item);
